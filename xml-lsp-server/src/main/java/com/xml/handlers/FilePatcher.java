@@ -139,4 +139,51 @@ public class FilePatcher {
             return false;
         }
     }
+
+    /**
+     * Applique un correctif automatique pour une erreur spécifique
+     */
+    public static boolean applyAutoFix(File xmlFile, String tagName, int lineNumber, String errorType) {
+        try {
+            String content = new String(java.nio.file.Files.readAllBytes(xmlFile.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            String[] lines = content.split("\n", -1);
+
+            if (lineNumber < 1 || lineNumber > lines.length) {
+                return false;
+            }
+
+            String originalLine = lines[lineNumber - 1];
+            String fixedLine = originalLine;
+
+            // Appliquer le correctif selon le type d'erreur
+            if ("STRUCTURE".equals(errorType)) {
+                if (originalLine.contains("<" + tagName) && !originalLine.contains("</" + tagName + ">")) {
+                    // Fermer la balise
+                    if (originalLine.trim().endsWith(">")) {
+                        fixedLine = originalLine.replace(">", "></" + tagName + ">");
+                    }
+                }
+            }
+
+            // Remplacer la ligne
+            lines[lineNumber - 1] = fixedLine;
+
+            // Reconstruire le contenu
+            StringBuilder newContent = new StringBuilder();
+            for (int i = 0; i < lines.length; i++) {
+                newContent.append(lines[i]);
+                if (i < lines.length - 1) {
+                    newContent.append("\n");
+                }
+            }
+
+            // Sauvegarder avec validation
+            return writeFileAtomically(xmlFile.toPath(), newContent.toString());
+
+        } catch (Exception e) {
+            LOG.error("Erreur lors de l'application du correctif automatique", e);
+            return false;
+        }
+    }
 }
