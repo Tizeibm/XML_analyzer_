@@ -1,81 +1,67 @@
 {
-  "name": "xml-validator-lsp",
-  "displayName": "XML Validator with LSP",
-  "description": "Validate large XML files with XSD schema using LSP server",
+  "name": "xml-analyzer",
+  "displayName": "XML Analyzer",
+  "description": "XML Language Server with validation and auto-fixing",
   "version": "1.0.0",
-  "publisher": "xml-validator",
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.74.0"
   },
   "categories": [
+    "Programming Languages",
     "Linters",
-    "Other"
+    "Formatters"
   ],
   "activationEvents": [
-    "onCommand:xmlValidator.validateXML",
-    "onCommand:xml.validateFiles",
-    "onView:xml-validator.errorPanel"
+    "onLanguage:xml",
+    "onCommand:xml.validateFile",
+    "onCommand:xml.validateFileWithXSD"
   ],
-  "main": "./dist/extension.js",
+  "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "xmlValidator.validateXML",
-        "title": "Validate XML with XSD",
-        "category": "XML Validator"
-      },
-      {
-        "command": "xml.validateFiles",
-        "title": "Valider fichiers XML",
+        "command": "xml.validateFile",
+        "title": "Validate XML File",
         "category": "XML"
       },
       {
-        "command": "xml.patchFragment",
-        "title": "Modifier le fragment XML",
-        "category": "XML"
-      },
-      {
-        "command": "xml.openValidator",
-        "title": "Ouvrir le validateur XML",
+        "command": "xml.validateFileWithXSD",
+        "title": "Validate XML File with XSD",
         "category": "XML"
       }
     ],
-    "views": {
-      "xml-validator": [
-        {
-          "id": "xml-validator.errorPanel",
-          "name": "Résultats de validation",
-          "type": "webview"
+    "configuration": {
+      "title": "XML Analyzer",
+      "properties": {
+        "xmlLSP.serverPath": {
+          "type": "string",
+          "default": "./server/xml-lsp-server.jar",
+          "description": "Path to the XML LSP server JAR file"
+        },
+        "xmlLSP.javaPath": {
+          "type": "string",
+          "default": "java",
+          "description": "Path to Java executable"
+        },
+        "xmlLSP.validation.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable XML validation"
         }
-      ]
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "xml-validator",
-          "title": "Validateur XML",
-          "icon": "resources/icon.svg"
-        }
-      ]
+      }
     }
   },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "@types/vscode": "^1.90.0",
-    "@vscode/vsce": "^2.22.0",
-    "typescript": "^5.3.0"
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "typescript": "^4.9.4"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.0",
-    "vscode-jsonrpc": "^8.2.0"
-  },
-  "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
-    "vscode:prepublish": "npm run compile",
-    "vsce-package": "vsce package"
+    "vscode-languageclient": "^8.0.2"
   }
 }
