@@ -1,4 +1,4 @@
-package com.xml;
+package com.xml.models;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

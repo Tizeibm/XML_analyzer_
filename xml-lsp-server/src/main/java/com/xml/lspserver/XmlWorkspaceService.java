@@ -1,4 +1,4 @@
-package com.xml;
+package com.xml.lspserver;
 
 import org.eclipse.lsp4j.*;
 import org.eclipse.lsp4j.services.WorkspaceService;

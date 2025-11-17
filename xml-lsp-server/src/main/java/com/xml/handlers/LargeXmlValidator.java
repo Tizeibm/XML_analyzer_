@@ -1,6 +1,7 @@
-package com.xml;
+package com.xml.handlers;
 
-import com.xml.handlers.XmlZoneExtractor;
+import com.xml.Validator;
+import com.xml.XMLParser;
 import com.xml.models.ErrorCollector;
 import com.xml.models.XMLError;
 import org.slf4j.Logger;
@@ -28,6 +29,9 @@ public class LargeXmlValidator {
      * Validation initiale sans extraction de zones (pour performance)
      */
     public ValidationResult validateWithoutZones(File xmlFile, File xsdFile) {
+        if (!xmlFile.exists()){
+            System.exit(0);
+        }
         long startTime = System.currentTimeMillis();
         this.currentXmlFile = xmlFile;
         
@@ -53,6 +57,24 @@ public class LargeXmlValidator {
         LOG.info("✅ Validation rapide terminée en {}ms - {} erreurs", validationTime, errors.size());
         
         return new ValidationResult(xsdValid, errors, validationTime, xmlFile.length());
+    }
+
+    /**
+     * Validation ultra-optimisée pour mémoire limitée
+     */
+    public ValidationResult validateWithMemoryOptimization(File xmlFile, File xsdFile) {
+        // Nettoyer la mémoire avant validation
+        System.gc();
+
+        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        LOG.info("Mémoire utilisée avant validation: {} MB", startMemory / (1024 * 1024));
+
+        ValidationResult result = validateWithoutZones(xmlFile, xsdFile);
+
+        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        LOG.info("Mémoire utilisée après validation: {} MB", endMemory / (1024 * 1024));
+
+        return result;
     }
 
     /**

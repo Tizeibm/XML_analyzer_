@@ -1,5 +1,7 @@
 package com.xml;
 
+import com.xml.handlers.TrackedStaxHandler;
+import com.xml.models.ErrorCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.InputSource;
@@ -34,7 +36,6 @@ public class XMLParser {
      */
     public void parse(File xmlFile) {
         LOG.info("Début parsing StAX : {}", xmlFile.getAbsolutePath());
-        errorCollector.clear();
         try (InputStream in = new FileInputStream(xmlFile)) {
             new TrackedStaxHandler(errorCollector).parse(in);   // ← unique ligne changée
             LOG.info("Parsing StAX terminé. Erreurs : {}", errorCollector.getErrorCount());

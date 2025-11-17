@@ -1,6 +1,8 @@
-package com.xml;
+package com.xml.handlers;
 
-import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
+import com.xml.models.ValidateFilesParams;
+import com.xml.models.XMLError;
+import org.eclipse.lsp4j.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,14 +14,19 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Handler LSP optimisé pour les gros fichiers XML
+ * Utilise publishDiagnostics pour envoyer les résultats
  */
 public class XMLValidationHandler {
     private static final Logger LOG = LoggerFactory.getLogger(XMLValidationHandler.class);
 
     private final LargeXmlValidator largeValidator = new LargeXmlValidator();
+    private org.eclipse.lsp4j.services.LanguageClient client;
 
-    @JsonRequest("xml/validateFiles")
-    public CompletableFuture<ValidationResponse> onValidateFiles(ValidateFilesParams params) {
+    public void setClient(org.eclipse.lsp4j.services.LanguageClient client) {
+        this.client = client;
+    }
+
+    public CompletableFuture<ValidationResponse> validateFiles(ValidateFilesParams params) {
         LOG.info("📁 Validation demandée - XML: {}, XSD: {}", params.xmlUri, params.xsdUri);
 
         return CompletableFuture.supplyAsync(() -> {
@@ -40,14 +47,26 @@ public class XMLValidationHandler {
                         largeValidator.validateWithoutZones(xmlFile, xsdFile);
 
                 // Conversion en diagnostics LSP
-                List<org.eclipse.lsp4j.Diagnostic> diagnostics =
-                        convertToDiagnostics(result.getErrors());
+                List<Diagnostic> diagnostics = convertToDiagnostics(result.getErrors());
+
+                // ENVOI DES DIAGNOSTICS via publishDiagnostics
+                if (client != null) {
+                    PublishDiagnosticsParams diagnosticsParams = new PublishDiagnosticsParams();
+                    diagnosticsParams.setUri(params.xmlUri);
+                    diagnosticsParams.setDiagnostics(diagnostics);
+
+                    client.publishDiagnostics(diagnosticsParams);
+                    LOG.info("✅ Diagnostics publiés: {} erreurs, {} warnings",
+                            result.getErrorCount(), result.getWarningCount());
+                } else {
+                    LOG.warn("⚠️ Client non disponible, impossible de publier les diagnostics");
+                }
 
                 // Réponse avec métriques
                 ValidationResponse response = new ValidationResponse();
                 response.success = result.isSuccess();
                 response.diagnostics = diagnostics;
-                response.errors = result.getErrors(); // Sans zones pour l'instant
+                response.errors = result.getErrors();
                 response.fileSize = result.getFileSize();
                 response.validationTime = result.getValidationTime();
                 response.errorCount = result.getErrorCount();
@@ -61,44 +80,29 @@ public class XMLValidationHandler {
 
             } catch (Exception e) {
                 LOG.error("❌ Erreur validation: {}", e.getMessage(), e);
+
+                // En cas d'erreur, publier un diagnostic d'erreur
+                if (client != null) {
+                    List<Diagnostic> errorDiagnostics = new ArrayList<>();
+                    Diagnostic errorDiag = new Diagnostic();
+                    errorDiag.setRange(new Range(new Position(0, 0), new Position(0, 1)));
+                    errorDiag.setSeverity(DiagnosticSeverity.Error);
+                    errorDiag.setMessage("Erreur de validation: " + e.getMessage());
+                    errorDiag.setSource("xml-validator");
+                    errorDiagnostics.add(errorDiag);
+
+                    PublishDiagnosticsParams diagnosticsParams = new PublishDiagnosticsParams();
+                    diagnosticsParams.setUri(params.xmlUri);
+                    diagnosticsParams.setDiagnostics(errorDiagnostics);
+                    client.publishDiagnostics(diagnosticsParams);
+                }
+
                 return new ValidationResponse(false, "Erreur validation: " + e.getMessage());
             }
         });
     }
 
-    /**
-     * Extrait les zones pour des erreurs spécifiques (à la demande)
-     */
-    @JsonRequest("xml/extractErrorZones")
-    public CompletableFuture<ZoneExtractionResponse> onExtractErrorZones(ZoneExtractionParams params) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                File xmlFile = new File(URI.create(params.xmlUri));
-                List<Integer> errorIndexes = params.errorIndexes;
-
-                LOG.info("📦 Extraction zones pour {} erreurs dans {}", errorIndexes.size(), xmlFile.getName());
-
-                // Extraire les zones uniquement pour les erreurs demandées
-                List<XMLError> errorsWithZones = largeValidator.extractZonesForErrors(
-                        params.errors, errorIndexes
-                );
-
-                return new ZoneExtractionResponse(true, errorsWithZones,
-                        "Zones extraites pour " + errorIndexes.size() + " erreurs");
-
-            } catch (Exception e) {
-                LOG.error("Erreur extraction zones: {}", e.getMessage());
-                return new ZoneExtractionResponse(false, params.errors,
-                        "Erreur extraction: " + e.getMessage());
-            }
-        });
-    }
-
-    /**
-     * Navigation précise vers une erreur avec extraction de zone
-     */
-    @JsonRequest("xml/navigateToError")
-    public CompletableFuture<NavigationResponse> onNavigateToError(NavigationParams params) {
+    public CompletableFuture<NavigationResponse> navigateToError(NavigationParams params) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 File xmlFile = new File(URI.create(params.xmlUri));
@@ -131,24 +135,83 @@ public class XMLValidationHandler {
         });
     }
 
-    // Conversion des erreurs en diagnostics LSP
-    private List<org.eclipse.lsp4j.Diagnostic> convertToDiagnostics(List<XMLError> errors) {
-        List<org.eclipse.lsp4j.Diagnostic> diagnostics = new ArrayList<>();
+    public CompletableFuture<ZoneExtractionResponse> extractErrorZones(ZoneExtractionParams params) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                File xmlFile = new File(URI.create(params.xmlUri));
+                List<Integer> errorIndexes = params.errorIndexes;
+
+                LOG.info("📦 Extraction zones pour {} erreurs dans {}", errorIndexes.size(), xmlFile.getName());
+
+                // Extraire les zones uniquement pour les erreurs demandées
+                List<XMLError> errorsWithZones = largeValidator.extractZonesForErrors(
+                        params.errors, errorIndexes
+                );
+
+                return new ZoneExtractionResponse(true, errorsWithZones,
+                        "Zones extraites pour " + errorIndexes.size() + " erreurs");
+
+            } catch (Exception e) {
+                LOG.error("Erreur extraction zones: {}", e.getMessage());
+                return new ZoneExtractionResponse(false, params.errors,
+                        "Erreur extraction: " + e.getMessage());
+            }
+        });
+    }
+
+    public CompletableFuture<PatchResponse> patchFragment(PatchParams params) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                boolean success = FilePatcher.patchFile(
+                        new File(URI.create(params.xmlUri)).getAbsolutePath(),
+                        params.modifiedFragment,
+                        params.fragmentStartLine,
+                        params.fragmentEndLine
+                );
+
+                return new PatchResponse(success,
+                        success ? "Patch appliqué avec succès" : "Échec du patching");
+
+            } catch (Exception e) {
+                LOG.error("Erreur patching", e);
+                return new PatchResponse(false, "Erreur: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Convertit les XMLError en Diagnostics LSP standard
+     */
+    private List<Diagnostic> convertToDiagnostics(List<XMLError> errors) {
+        List<Diagnostic> diagnostics = new ArrayList<>();
 
         for (XMLError error : errors) {
-            org.eclipse.lsp4j.Diagnostic diagnostic = new org.eclipse.lsp4j.Diagnostic();
+            Diagnostic diagnostic = new Diagnostic();
+
+            // Position (LSP utilise des indices 0-based)
+            int line = Math.max(0, error.getLineNumber() - 1);
+            int column = Math.max(0, error.getColumn() - 1);
+
+            Range range = new Range(
+                    new Position(line, column),
+                    new Position(line, column + 30) // Zone de soulignement approximative
+            );
+            diagnostic.setRange(range);
 
             // Sévérité
             diagnostic.setSeverity(mapSeverity(error.getSeverity()));
-            diagnostic.setMessage(error.getMessage());
-            diagnostic.setCode(error.getType());
-            diagnostic.setSource("xml-validator-gros-fichiers");
 
-            // Plage précise
-            diagnostic.setRange(new org.eclipse.lsp4j.Range(
-                    new org.eclipse.lsp4j.Position(error.getPreciseStartLine() - 1, error.getPreciseStartColumn() - 1),
-                    new org.eclipse.lsp4j.Position(error.getPreciseEndLine() - 1, error.getPreciseEndColumn() - 1)
-            ));
+            // Message
+            diagnostic.setMessage(error.getMessage());
+
+            // Code et source
+            diagnostic.setCode(error.getCode());
+            diagnostic.setSource("xml-validator");
+
+            // Tags optionnels
+            if (error.getType().equals("WARNING")) {
+                diagnostic.setTags(List.of(DiagnosticTag.Unnecessary));
+            }
 
             diagnostics.add(diagnostic);
         }
@@ -156,15 +219,24 @@ public class XMLValidationHandler {
         return diagnostics;
     }
 
-    private org.eclipse.lsp4j.DiagnosticSeverity mapSeverity(String severity) {
-        switch (severity) {
-            case "error": return org.eclipse.lsp4j.DiagnosticSeverity.Error;
-            case "warning": return org.eclipse.lsp4j.DiagnosticSeverity.Warning;
-            default: return org.eclipse.lsp4j.DiagnosticSeverity.Information;
+    private DiagnosticSeverity mapSeverity(String severity) {
+        if (severity == null) return DiagnosticSeverity.Error;
+
+        switch (severity.toLowerCase()) {
+            case "error":
+                return DiagnosticSeverity.Error;
+            case "warning":
+                return DiagnosticSeverity.Warning;
+            case "info":
+                return DiagnosticSeverity.Information;
+            case "hint":
+                return DiagnosticSeverity.Hint;
+            default:
+                return DiagnosticSeverity.Error;
         }
     }
 
-    // Classes de paramètres et réponses
+    // Classes de paramètres et réponses (inchangées)
     public static class ZoneExtractionParams {
         public String xmlUri;
         public List<XMLError> errors;
@@ -206,12 +278,28 @@ public class XMLValidationHandler {
         }
     }
 
-    // Classe ValidationResponse existante (à adapter)
+    public static class PatchParams {
+        public String xmlUri;
+        public String modifiedFragment;
+        public int fragmentStartLine;
+        public int fragmentEndLine;
+    }
+
+    public static class PatchResponse {
+        public boolean success;
+        public String message;
+
+        public PatchResponse(boolean success, String message) {
+            this.success = success;
+            this.message = message;
+        }
+    }
+
     public static class ValidationResponse {
         public boolean success;
         public String message;
-        public java.util.List<org.eclipse.lsp4j.Diagnostic> diagnostics;
-        public java.util.List<XMLError> errors;
+        public List<Diagnostic> diagnostics;
+        public List<XMLError> errors;
         public long fileSize;
         public long validationTime;
         public int errorCount;
@@ -223,8 +311,8 @@ public class XMLValidationHandler {
         public ValidationResponse(boolean success, String message) {
             this.success = success;
             this.message = message;
-            this.diagnostics = java.util.List.of();
-            this.errors = java.util.List.of();
+            this.diagnostics = new ArrayList<>();
+            this.errors = new ArrayList<>();
         }
     }
 }

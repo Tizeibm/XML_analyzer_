@@ -1,4 +1,4 @@
-package com.xml;
+package com.xml.models;
 
 /**
  * Paramètres pour la notification xml/structureError

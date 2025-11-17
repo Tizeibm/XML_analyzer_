@@ -1,5 +1,6 @@
 package com.xml;
 
+import com.xml.models.ErrorCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;

@@ -1,5 +1,6 @@
-package com.xml;
+package com.xml.handlers;
 
+import com.xml.models.ErrorCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.xml.stream.*;
@@ -53,8 +54,7 @@ public class TrackedStaxHandler {
 
                 if (event.isStartElement()) {
                     handleStartElement(event.asStartElement());
-                }
-                else if (event.isEndElement()) {
+                } else if (event.isEndElement()) {
                     handleEndElement(event.asEndElement());
                 }
                 // Note: Les balises auto-fermantes (<tag/>) sont gérées automatiquement
@@ -84,7 +84,7 @@ public class TrackedStaxHandler {
         int line = location.getLineNumber();
         int column = location.getColumnNumber();
 
-        LOG.debug("Balise ouvrante: <{}> à ligne {}, colonne {}", tagName, line, column);
+        //LOG.debug("Balise ouvrante: <{}> à ligne {}, colonne {}", tagName, line, column);
 
         // Empiler la balise avec sa position
         tagStack.push(new TagInfo(tagName, line, column));
@@ -94,7 +94,7 @@ public class TrackedStaxHandler {
         String tagName = endElement.getName().getLocalPart();
         Location location = endElement.getLocation();
 
-        LOG.debug("Balise fermante: </{}> à ligne {}", tagName, location.getLineNumber());
+        //LOG.debug("Balise fermante: </{}> à ligne {}", tagName, location.getLineNumber());
 
         if (tagStack.isEmpty()) {
             // Balise fermante sans balise ouvrante correspondante

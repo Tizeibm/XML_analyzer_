@@ -1,4 +1,4 @@
-package com.xml;
+package com.xml.models;
 
 /**
  * Représente une erreur XML détectée (syntaxe, structure, validation).

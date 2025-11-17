@@ -1,4 +1,4 @@
-package com.xml;
+package com.xml.lspserver;
 
 import org.eclipse.lsp4j.*;
 import org.eclipse.lsp4j.services.TextDocumentService;
@@ -22,22 +22,22 @@ public class XmlTextDocumentService implements TextDocumentService {
 
     }
 
-    @Override 
+    @Override
     public void didOpen(DidOpenTextDocumentParams params) {
         LOG.info("Document ouvert : {}", params.getTextDocument().getUri());
     }
 
-    @Override 
+    @Override
     public void didChange(DidChangeTextDocumentParams params) {
         LOG.debug("Document modifié : {}", params.getTextDocument().getUri());
     }
 
-    @Override 
+    @Override
     public void didClose(DidCloseTextDocumentParams params) {
         LOG.info("Document fermé : {}", params.getTextDocument().getUri());
     }
 
-    @Override 
+    @Override
     public void didSave(DidSaveTextDocumentParams params) {
         LOG.info("Document sauvegardé : {}", params.getTextDocument().getUri());
     }
