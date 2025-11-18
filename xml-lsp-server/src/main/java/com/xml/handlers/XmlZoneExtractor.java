@@ -1,7 +1,7 @@
 package com.xml.handlers;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -15,7 +15,7 @@ import java.util.List;
  * Optimisé pour les fichiers de plusieurs To.
  */
 public class XmlZoneExtractor {
-    private static final Logger LOG = LoggerFactory.getLogger(XmlZoneExtractor.class);
+
     
     // Taille du buffer pour la lecture optimisée
     private static final int BUFFER_SIZE = 8192;
@@ -65,7 +65,7 @@ public class XmlZoneExtractor {
             }
 
             long extractionTime = System.currentTimeMillis() - startTime;
-            LOG.debug("Zone extraite en {}ms : lignes {}-{}", extractionTime, startLine, endLine);
+
             
             return new XmlZone(
                 String.join("\n", zoneLines),
@@ -76,7 +76,7 @@ public class XmlZoneExtractor {
             );
             
         } catch (Exception e) {
-            LOG.error("Erreur extraction zone ligne {}: {}", centerLine, e.getMessage());
+
             return XmlZone.EMPTY_ZONE;
         }
     }
@@ -101,7 +101,7 @@ public class XmlZoneExtractor {
             }
             
         } catch (Exception e) {
-            LOG.error("Erreur extraction zone position {}: {}", approximatePosition, e.getMessage());
+
             return XmlZone.EMPTY_ZONE;
         }
     }
@@ -142,7 +142,7 @@ public class XmlZoneExtractor {
             return new XmlZone(zoneContent, startLine, endLine, errorLine, contextLines.size(), parentTag);
             
         } catch (Exception e) {
-            LOG.error("Erreur extraction zone avec contexte: {}", e.getMessage());
+
             return XmlZone.EMPTY_ZONE;
         }
     }

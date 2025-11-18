@@ -5,8 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+
 
 /**
  * Moteur de patching pour appliquer des modifications de fragment au fichier original
@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
  * 4. Écrire atomiquement avec sauvegarde de backup
  */
 public class FilePatcher {
-    private static final Logger LOG = LoggerFactory.getLogger(FilePatcher.class);
+
 
     /**
      * Applique une modification de fragment au fichier XML original.
@@ -42,7 +42,7 @@ public class FilePatcher {
             String originalContent = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
             String[] lines = originalContent.split("\n", -1);
             
-            LOG.info("Patching {} from line {} to {}", filePath, fragmentStartLine, fragmentEndLine);
+             
 
             // Construire le nouveau contenu
             StringBuilder newContent = new StringBuilder();
@@ -70,14 +70,14 @@ public class FilePatcher {
             String patchedContent = newContent.toString();
             
             if (!validateXmlStructure(patchedContent)) {
-                LOG.error("Validation échouée pour le contenu patchè: structure XML invalide");
+
                 return false;
             }
 
             return writeFileAtomically(path, patchedContent);
             
         } catch (IOException e) {
-            LOG.error("Erreur lors du patching du fichier {}", filePath, e);
+
             return false;
         }
     }
@@ -105,15 +105,15 @@ public class FilePatcher {
                             (openCount - selfClosingCount - closeCount) >= -1;
             
             if (isValid) {
-                LOG.debug("Validation XML réussie");
+
             } else {
-                LOG.warn("Structure XML potentiellement invalide: open={}, close={}, self-closing={}", 
-                    openCount, closeCount, selfClosingCount);
+
+
             }
             return isValid;
             
         } catch (Exception e) {
-            LOG.warn("Erreur lors de la validation de structure", e);
+
             return false;
         }
     }
@@ -126,16 +126,16 @@ public class FilePatcher {
             Path backupPath = Paths.get(path.toString() + ".backup");
             if (Files.exists(path)) {
                 Files.copy(path, backupPath);
-                LOG.info("Backup créé: {}", backupPath);
+                
             }
             
             // Écrire le nouveau contenu
             Files.write(path, content.getBytes(StandardCharsets.UTF_8));
-            LOG.info("Fichier sauvegardé avec succès: {}", path);
+            
             return true;
             
         } catch (IOException e) {
-            LOG.error("Erreur lors de l'écriture du fichier", e);
+
             return false;
         }
     }
@@ -182,7 +182,7 @@ public class FilePatcher {
             return writeFileAtomically(xmlFile.toPath(), newContent.toString());
 
         } catch (Exception e) {
-            LOG.error("Erreur lors de l'application du correctif automatique", e);
+
             return false;
         }
     }

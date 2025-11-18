@@ -4,8 +4,8 @@ import com.xml.Validator;
 import com.xml.XMLParser;
 import com.xml.models.ErrorCollector;
 import com.xml.models.XMLError;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+
 
 import java.io.File;
 import java.util.ArrayList;
@@ -16,7 +16,7 @@ import java.util.List;
  * N'extrait les zones que sur demande pour économiser la mémoire
  */
 public class LargeXmlValidator {
-    private static final Logger LOG = LoggerFactory.getLogger(LargeXmlValidator.class);
+
     
     private final ErrorCollector errorCollector;
     private File currentXmlFile;
@@ -35,9 +35,6 @@ public class LargeXmlValidator {
         long startTime = System.currentTimeMillis();
         this.currentXmlFile = xmlFile;
         
-        LOG.info("🚀 Début validation rapide pour gros fichier: {} ({} bytes)", 
-                xmlFile.getName(), xmlFile.length());
-        
         errorCollector.clear();
 
         // Validation XSD si disponible
@@ -54,7 +51,7 @@ public class LargeXmlValidator {
         List<XMLError> errors = convertToErrorsWithoutZones(errorCollector.getErrors());
         
         long validationTime = System.currentTimeMillis() - startTime;
-        LOG.info("✅ Validation rapide terminée en {}ms - {} erreurs", validationTime, errors.size());
+        
         
         return new ValidationResult(xsdValid, errors, validationTime, xmlFile.length());
     }
@@ -67,12 +64,12 @@ public class LargeXmlValidator {
         System.gc();
 
         long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-        LOG.info("Mémoire utilisée avant validation: {} MB", startMemory / (1024 * 1024));
+        
 
         ValidationResult result = validateWithoutZones(xmlFile, xsdFile);
 
         long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-        LOG.info("Mémoire utilisée après validation: {} MB", endMemory / (1024 * 1024));
+        
 
         return result;
     }
@@ -82,7 +79,7 @@ public class LargeXmlValidator {
      */
     public List<XMLError> extractZonesForErrors(List<XMLError> errors, List<Integer> errorIndexes) {
         if (currentXmlFile == null || !currentXmlFile.exists()) {
-            LOG.warn("Aucun fichier XML courant pour extraction de zones");
+
             return errors;
         }
         
@@ -99,14 +96,14 @@ public class LargeXmlValidator {
                     
                     error.setZone(zone.getContent(), zone.getStartLine(), zone.getEndLine());
                     
-                    LOG.debug("Zone extraite pour erreur {}: lignes {}-{}", 
-                             index, zone.getStartLine(), zone.getEndLine());
+
+
                 }
             }
         }
         
         long extractTime = System.currentTimeMillis() - startTime;
-        LOG.info("📦 Extraction de {} zones en {}ms", errorIndexes.size(), extractTime);
+        
         
         return errors;
     }
@@ -119,7 +116,7 @@ public class LargeXmlValidator {
             return errors;
         }
         
-        LOG.info("Extraction de toutes les zones ({} erreurs)", errors.size());
+        
         
         for (XMLError error : errors) {
             if (!error.isZoneExtracted()) {

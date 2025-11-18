@@ -1,8 +1,8 @@
 package com.xml;
 
 import com.xml.models.ErrorCollector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.helpers.DefaultHandler;
@@ -20,7 +20,7 @@ import java.nio.file.Files;
  */
 public class Validator {
 
-    private static final Logger LOG = LoggerFactory.getLogger(Validator.class);
+
     private final ErrorCollector collector;
 
     public Validator(ErrorCollector collector) {
@@ -29,11 +29,11 @@ public class Validator {
 
     public boolean validate(File xmlFile, File xsdFile) {
         if (xsdFile == null || !xsdFile.exists()) {
-            LOG.warn("XSD non fourni ou inexistant, validation XSD ignorée");
+
             return true;
         }
 
-        LOG.info("Validation XSD : {} contre {}", xmlFile.getName(), xsdFile.getName());
+        
 
         try {
             SchemaFactory factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
@@ -49,11 +49,11 @@ public class Validator {
             try (var is = Files.newInputStream(xmlFile.toPath())) {
                 validator.validate(new StreamSource(is));
             }
-            LOG.info("Validation XSD réussie pour {}", xmlFile.getName());
+            
             return true;
         } catch (SAXException | IOException e) {
             collector.addError("Validation XSD échouée : " + e.getMessage(), 0, "FATAL_VALIDATION");
-            LOG.error("Erreur validation XSD", e);
+
             return false;
         }
     }

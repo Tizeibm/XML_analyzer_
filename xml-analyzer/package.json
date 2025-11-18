@@ -1,67 +1,168 @@
 {
-  "name": "xml-analyzer",
-  "displayName": "XML Analyzer",
-  "description": "XML Language Server with validation and auto-fixing",
+  "name": "xml-validator-lsp",
+  "displayName": "XML Validator with LSP",
+  "description": "Extension de validation XML avec serveur LSP Java",
   "version": "1.0.0",
+  "publisher": "votre-nom",
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.75.0"
   },
   "categories": [
     "Programming Languages",
-    "Linters",
-    "Formatters"
+    "Linters"
+  ],
+  "keywords": [
+    "xml",
+    "xsd",
+    "validation",
+    "lsp",
+    "language-server"
   ],
   "activationEvents": [
     "onLanguage:xml",
-    "onCommand:xml.validateFile",
-    "onCommand:xml.validateFileWithXSD"
+    "onCommand:xml.validateCurrent",
+    "onCommand:xml.validateWithSchema",
+    "onCommand:xml.validateQuick"
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
+    "languages": [
       {
-        "command": "xml.validateFile",
-        "title": "Validate XML File",
-        "category": "XML"
-      },
-      {
-        "command": "xml.validateFileWithXSD",
-        "title": "Validate XML File with XSD",
-        "category": "XML"
+        "id": "xml",
+        "extensions": [".xml"],
+        "aliases": ["XML", "xml"],
+        "configuration": "./language-configuration.json"
       }
     ],
+    "commands": [
+      {
+        "command": "xml.validateCurrent",
+        "title": "Valider le fichier actuel",
+        "category": "XML Validator",
+        "icon": "$(check)"
+      },
+      {
+        "command": "xml.validateWithSchema",
+        "title": "Valider avec schéma XSD...",
+        "category": "XML Validator",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "xml.validateQuick",
+        "title": "Validation rapide (auto-détection XSD)",
+        "category": "XML Validator",
+        "icon": "$(zap)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "xml.validateCurrent",
+          "when": "editorLangId == xml"
+        },
+        {
+          "command": "xml.validateWithSchema"
+        },
+        {
+          "command": "xml.validateQuick",
+          "when": "editorLangId == xml"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "xml.validateCurrent",
+          "when": "resourceExtname == .xml",
+          "group": "xml@1"
+        },
+        {
+          "command": "xml.validateQuick",
+          "when": "resourceExtname == .xml",
+          "group": "xml@2"
+        },
+        {
+          "command": "xml.validateWithSchema",
+          "group": "xml@3"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "xml.validateCurrent",
+          "when": "resourceExtname == .xml",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
-      "title": "XML Analyzer",
+      "title": "XML Validator",
       "properties": {
-        "xmlLSP.serverPath": {
-          "type": "string",
-          "default": "./server/xml-lsp-server.jar",
-          "description": "Path to the XML LSP server JAR file"
-        },
-        "xmlLSP.javaPath": {
-          "type": "string",
-          "default": "java",
-          "description": "Path to Java executable"
-        },
-        "xmlLSP.validation.enabled": {
+        "xmlValidator.autoValidate": {
           "type": "boolean",
-          "default": true,
-          "description": "Enable XML validation"
+          "default": false,
+          "description": "Activer la validation automatique lors de l'ouverture d'un fichier XML"
+        },
+        "xmlValidator.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Niveau de trace du serveur LSP"
+        },
+        "xmlValidator.maxFileSize": {
+          "type": "number",
+          "default": 10485760,
+          "description": "Taille maximale de fichier en bytes (défaut: 10 MB)"
+        },
+        "xmlValidator.java.home": {
+          "type": "string",
+          "default": "",
+          "description": "Chemin vers l'installation Java (laisser vide pour utiliser JAVA_HOME)"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "xml.validateCurrent",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorLangId == xml"
+      },
+      {
+        "command": "xml.validateQuick",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "editorLangId == xml"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
-  },
-  "devDependencies": {
-    "@types/vscode": "^1.74.0",
-    "@types/node": "16.x",
-    "typescript": "^4.9.4"
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "dependencies": {
-    "vscode-languageclient": "^8.0.2"
-  }
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Tizeibm/XML_analyzer_Njangihost"
+  },
+  "bugs": {
+    "url": "https://github.com/votre-username/XML_analyzer_Njangihost/issues"
+  },
+  "homepage": "https://github.com/votre-username/XML_analyzer_Njangihost#readme",
+  "license": "MIT"
 }

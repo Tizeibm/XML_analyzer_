@@ -1,7 +1,7 @@
 package com.xml.models;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,13 +12,13 @@ import java.util.List;
  */
 public class ErrorCollector {
 
-    private static final Logger LOG = LoggerFactory.getLogger(ErrorCollector.class);
+
     private final List<XMLError> errors = Collections.synchronizedList(new ArrayList<>());
 
     public void addError(String message, int lineNumber, String type) {
         XMLError err = new XMLError(message, lineNumber, type);
         errors.add(err);
-        LOG.error(err.toString());
+
     }
 
     public List<XMLError> getErrors() {

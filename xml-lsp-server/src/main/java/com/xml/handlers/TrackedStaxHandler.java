@@ -1,8 +1,8 @@
 package com.xml.handlers;
 
 import com.xml.models.ErrorCollector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+
 import javax.xml.stream.*;
 import javax.xml.stream.events.XMLEvent;
 import java.io.InputStream;
@@ -15,7 +15,7 @@ import java.util.Deque;
  */
 public class TrackedStaxHandler {
 
-    private static final Logger LOG = LoggerFactory.getLogger(TrackedStaxHandler.class);
+
     private final ErrorCollector collector;
 
     // Stack pour suivre les balises ouvertes avec leur position exacte
@@ -71,7 +71,7 @@ public class TrackedStaxHandler {
                 try {
                     reader.close();
                 } catch (XMLStreamException e) {
-                    LOG.debug("Erreur lors de la fermeture du reader", e);
+
                 }
             }
         }
@@ -84,7 +84,7 @@ public class TrackedStaxHandler {
         int line = location.getLineNumber();
         int column = location.getColumnNumber();
 
-        //LOG.debug("Balise ouvrante: <{}> à ligne {}, colonne {}", tagName, line, column);
+
 
         // Empiler la balise avec sa position
         tagStack.push(new TagInfo(tagName, line, column));
@@ -94,7 +94,7 @@ public class TrackedStaxHandler {
         String tagName = endElement.getName().getLocalPart();
         Location location = endElement.getLocation();
 
-        //LOG.debug("Balise fermante: </{}> à ligne {}", tagName, location.getLineNumber());
+
 
         if (tagStack.isEmpty()) {
             // Balise fermante sans balise ouvrante correspondante
@@ -181,8 +181,8 @@ public class TrackedStaxHandler {
                     "STRUCTURE"
             );
 
-            LOG.warn("Balise non fermée détectée: {} à ligne {}",
-                    unclosedTag.name, unclosedTag.lineNumber);
+
+
         }
     }
 
@@ -221,7 +221,7 @@ public class TrackedStaxHandler {
         }
 
         collector.addError(message, line, type);
-        LOG.debug("Erreur de parsing à ligne {}: {}", line, message);
+
     }
 
     private String extractTagNameFromErrorMessage(String message) {
@@ -236,7 +236,7 @@ public class TrackedStaxHandler {
                 }
             }
         } catch (Exception e) {
-            LOG.debug("Impossible d'extraire le nom de balise du message d'erreur", e);
+
         }
         return null;
     }

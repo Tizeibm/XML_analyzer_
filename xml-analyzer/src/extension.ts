@@ -1,126 +1,68 @@
-import * as path from 'path';
-import * as fs from 'fs';
 import * as vscode from 'vscode';
-import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
-
-let client: LanguageClient;
-let extensionContext: vscode.ExtensionContext;
-
-// Interfaces (garder les mêmes que précédemment)
-interface ValidationResultsParams {
-    xmlUri: string;
-    errors: XMLError[];
-    errorCount: number;
-    warningCount: number;
-}
-
-interface StructureErrorParams {
-    xmlUri: string;
-    message: string;
-    lineNumber: number;
-    columnNumber: number;
-    tagName: string;
-    errorType: string;
-}
-
-interface XMLError {
-    id: string;
-    line: number;
-    column: number;
-    message: string;
-    severity: string;
-    code: string;
-    fragment?: string;
-    fragmentStartLine?: number;
-    fragmentEndLine?: number;
-    tagName?: string;
-    suggestion?: string;
-}
-
-interface PatchFragmentParams {
-    xmlUri: string;
-    fragment: string;
-    startLine: number;
-    endLine: number;
-}
+import {
+    LanguageClient,
+    LanguageClientOptions,
+    ServerOptions,
+    TransportKind
+} from 'vscode-languageclient/node';
+import * as path from 'path';
 
 interface ValidationResponse {
-    diagnostics: any[];
-    success?: boolean;
+    success: boolean;
+    diagnostics: vscode.Diagnostic[];
+    errors: any[];
+    fileSize: number;
+    validationTime: number;
+    errorCount: number;
+    warningCount: number;
+    summary: string;
 }
+
+// Collection de diagnostics
+const diagnosticCollection = vscode.languages.createDiagnosticCollection('xml');
+
+// Variable globale pour le client (accessible dans toutes les commandes)
+let client: LanguageClient;
 
 export function activate(context: vscode.ExtensionContext) {
-    extensionContext = context;
-    console.log('Extension XML Analyzer activée');
+    console.log('🚀 Activation de l\'extension XML Validator');
 
-    // Commandes (garder les mêmes)
-    const validateFileCommand = vscode.commands.registerCommand('xml.validateFile', async () => {
-        const activeEditor = vscode.window.activeTextEditor;
-        if (!activeEditor || activeEditor.document.languageId !== 'xml') {
-            vscode.window.showWarningMessage('Ouvrez un fichier XML pour le valider');
-            return;
-        }
-        await validateXmlFile(activeEditor.document.uri, null);
-    });
+    // ========================================
+    // 📡 INITIALISATION DU CLIENT LSP
+    // ========================================
+    
+    // Chemin vers votre JAR du serveur LSP
+    const serverJarPath = context.asAbsolutePath(
+        path.join('server', 'xml-lsp-server.jar')
+    );
 
-    const validateWithXSDCommand = vscode.commands.registerCommand('xml.validateFileWithXSD', async () => {
-        const activeEditor = vscode.window.activeTextEditor;
-        if (!activeEditor || activeEditor.document.languageId !== 'xml') {
-            vscode.window.showWarningMessage('Ouvrez un fichier XML pour le valider');
-            return;
-        }
-
-        const xsdUri = await vscode.window.showOpenDialog({
-            title: 'Sélectionner le schéma XSD',
-            filters: { 'XSD': ['xsd'] },
-            canSelectMany: false
-        });
-
-        if (xsdUri && xsdUri[0]) {
-            await validateXmlFile(activeEditor.document.uri, xsdUri[0]);
-        }
-    });
-
-    context.subscriptions.push(validateFileCommand, validateWithXSDCommand);
-
-    // Démarrer le client LSP
-    startLanguageClient(context);
-}
-
-async function startLanguageClient(context: vscode.ExtensionContext) {
-    const config = vscode.workspace.getConfiguration('xmlLSP');
-    let serverPath = config.get<string>('serverPath') || './server/xml-lsp-server.jar';
-    const javaPath = config.get<string>('javaPath') || 'java';
-
-    // Résoudre le chemin absolu du serveur
-    if (!path.isAbsolute(serverPath)) {
-        serverPath = path.resolve(context.extensionPath, serverPath);
-    }
-
-    // Vérifier que le JAR existe
-    if (!fs.existsSync(serverPath)) {
-        vscode.window.showErrorMessage(
-            `Fichier serveur LSP introuvable: ${serverPath}. ` +
-            `Veuillez configurer le chemin correct dans les paramètres.`,
-            'Ouvrir les paramètres'
-        ).then(selection => {
-            if (selection === 'Ouvrir les paramètres') {
-                vscode.commands.executeCommand('workbench.action.openSettings', 'xmlLSP.serverPath');
-            }
-        });
+    const fs = require('fs');
+    if (!fs.existsSync(serverJarPath)) {
+        vscode.window.showErrorMessage(`❌ Fichier JAR introuvable: ${serverJarPath}`);
+        console.error('❌ JAR non trouvé à:', serverJarPath);
         return;
     }
 
-    console.log(`Utilisation du serveur LSP: ${serverPath}`);
+    console.log('✅ JAR trouvé:', serverJarPath);
 
+    // Configuration du serveur
     const serverOptions: ServerOptions = {
-        command: javaPath,
-        args: ['-jar', serverPath],
-        options: {
-            cwd: context.extensionPath
+        run: {
+            command: 'java',
+            args: ['-jar', serverJarPath],
+            transport: TransportKind.stdio
+        },
+        debug: {
+            command: 'java',
+            args: [
+                '-jar',
+                serverJarPath
+            ],
+            transport: TransportKind.stdio
         }
     };
 
+    // Options du client
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ scheme: 'file', language: 'xml' }],
         synchronize: {
@@ -128,271 +70,214 @@ async function startLanguageClient(context: vscode.ExtensionContext) {
         }
     };
 
+    // Créer le client
     client = new LanguageClient(
-        'xmlLSP',
+        'xmlLanguageServer',
         'XML Language Server',
         serverOptions,
         clientOptions
     );
 
-    // Enregistrer les gestionnaires de notifications
-    registerCustomNotifications();
+    // Démarrer le client
+    client.start();
 
-    try {
-        await client.start();
-        console.log('Client LSP XML démarré avec succès');
-        vscode.window.showInformationMessage('XML Analyzer démarré');
-    } catch (error) {
-        console.error('Erreur démarrage client LSP:', error);
-        vscode.window.showErrorMessage(`Erreur démarrage XML Analyzer: ${error}`);
-    }
-}
+    console.log('✅ Client LSP démarré');
 
-function registerCustomNotifications() {
-    client.onNotification('xml/validationResults', (params: ValidationResultsParams) => {
-        handleValidationResults(params);
-    });
+    // ========================================
+    // 🎯 ENREGISTREMENT DES COMMANDES
+    // ========================================
 
-    client.onNotification('xml/structureError', (params: StructureErrorParams) => {
-        handleStructureError(params);
-    });
-}
-
-async function validateXmlFile(xmlUri: vscode.Uri, xsdUri: vscode.Uri | null) {
-    if (!client) {
-        vscode.window.showErrorMessage('Client LSP non initialisé');
-        return;
-    }
-
-    try {
-        await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Validation XML en cours...',
-            cancellable: false
-        }, async (progress) => {
-            const params = {
-                xmlUri: xmlUri.toString(),
-                xsdUri: xsdUri ? xsdUri.toString() : null
-            };
-
-            const result = await client.sendRequest('xml/validateFiles', params) as ValidationResponse;
-            
-            if (result.diagnostics && result.diagnostics.length > 0) {
-                vscode.window.showInformationMessage(
-                    `Validation terminée: ${result.diagnostics.length} problème(s) trouvé(s)`,
-                    'Voir les détails'
-                ).then(selection => {
-                    if (selection === 'Voir les détails') {
-                        showValidationPanel();
-                    }
-                });
-            } else {
-                vscode.window.showInformationMessage('✅ Aucune erreur trouvée dans le fichier XML');
+    // Commande 1 : Valider le fichier actuel
+    const validateCurrentCommand = vscode.commands.registerCommand(
+        'xml.validateCurrent',
+        async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showWarningMessage('Aucun fichier ouvert');
+                return;
             }
 
-            return result;
-        });
-
-    } catch (error) {
-        console.error('Erreur validation XML:', error);
-        vscode.window.showErrorMessage(`Erreur lors de la validation: ${error}`);
-    }
-}
-
-function handleValidationResults(params: ValidationResultsParams) {
-    console.log('Résultats validation reçus:', params.errorCount, 'erreurs');
-    
-    if (params.errorCount > 0) {
-        vscode.window.showWarningMessage(
-            `Validation XML: ${params.errorCount} erreur(s), ${params.warningCount} avertissement(s)`,
-            'Afficher le rapport'
-        ).then(selection => {
-            if (selection === 'Afficher le rapport') {
-                showValidationResultsWebview(params);
+            if (!editor.document.uri.fsPath.endsWith('.xml')) {
+                vscode.window.showWarningMessage('Le fichier actuel n\'est pas un fichier XML');
+                return;
             }
-        });
-    }
 
-    extensionContext.workspaceState.update('lastValidationResults', params);
-}
-
-function handleStructureError(params: StructureErrorParams) {
-    const message = `Erreur structurelle (ligne ${params.lineNumber}): ${params.message}`;
-    vscode.window.showErrorMessage(message, 'Corriger automatiquement')
-        .then(async (selection) => {
-            if (selection === 'Corriger automatiquement') {
-                await attemptAutoFix(params);
-            }
-        });
-}
-
-async function attemptAutoFix(params: StructureErrorParams) {
-    try {
-        const result = await client.sendRequest('xml/autoFix', {
-            xmlUri: params.xmlUri,
-            errorType: params.errorType,
-            lineNumber: params.lineNumber,
-            tagName: params.tagName
-        }) as { success: boolean };
-
-        if (result.success) {
-            vscode.window.showInformationMessage('Correctif appliqué avec succès');
-        } else {
-            vscode.window.showWarningMessage('Impossible d\'appliquer le correctif automatiquement');
+            // ✅ RÉCUPÉRATION DE L'URL : editor.document.uri
+            await validateXmlFile(client, editor.document.uri);
         }
-    } catch (error) {
-        vscode.window.showErrorMessage(`Erreur lors de l'application du correctif: ${error}`);
-    }
-}
-
-function showValidationPanel() {
-    const results = extensionContext.workspaceState.get<ValidationResultsParams>('lastValidationResults');
-    if (results) {
-        showValidationResultsWebview(results);
-    } else {
-        vscode.window.showInformationMessage('Aucun résultat de validation disponible');
-    }
-}
-
-function showValidationResultsWebview(params: ValidationResultsParams) {
-    const panel = vscode.window.createWebviewPanel(
-        'xmlValidationResults',
-        `Validation XML - ${path.basename(params.xmlUri)}`,
-        vscode.ViewColumn.Two,
-        { enableScripts: true }
     );
 
-    panel.webview.html = generateValidationResultsHtml(params);
-    
-    panel.webview.onDidReceiveMessage(
-        async (message) => {
-            switch (message.command) {
-                case 'showError':
-                    await showErrorInEditor(message.line, message.message);
-                    break;
-                case 'validateAgain':
-                    const xmlUri = vscode.Uri.parse(params.xmlUri);
-                    await validateXmlFile(xmlUri, null);
-                    break;
+    // Commande 2 : Valider avec XSD sélectionné
+    const validateWithSchemaCommand = vscode.commands.registerCommand(
+        'xml.validateWithSchema',
+        async () => {
+            // 📁 Sélectionner le fichier XML
+            const xmlFiles = await vscode.window.showOpenDialog({
+                canSelectMany: false,
+                openLabel: 'Sélectionner le fichier XML',
+                filters: { 'XML Files': ['xml'] },
+                title: 'Sélectionner le fichier XML à valider'
+            });
+
+            if (!xmlFiles || xmlFiles.length === 0) {
+                return;
             }
-        },
-        undefined,
-        extensionContext.subscriptions
-    );
-}
 
-function escapeHtml(unsafe: string): string {
-    if (!unsafe) return '';
-    return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
+            // ✅ RÉCUPÉRATION DE L'URL XML : xmlFiles[0]
+            const xmlUri = xmlFiles[0];
+            console.log('📄 XML sélectionné:', xmlUri.toString());
 
-function generateValidationResultsHtml(params: ValidationResultsParams): string {
-    return `
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Résultats Validation XML</title>
-        <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; 
-                   background-color: var(--vscode-editor-background); color: var(--vscode-editor-foreground); }
-            .header { border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 15px; margin-bottom: 20px; }
-            .summary { display: flex; gap: 20px; margin-bottom: 15px; }
-            .summary-item { padding: 10px 15px; border-radius: 4px; font-weight: bold; }
-            .summary-errors { background-color: var(--vscode-inputValidation-errorBackground); 
-                             color: var(--vscode-inputValidation-errorForeground); }
-            .summary-warnings { background-color: var(--vscode-inputValidation-warningBackground); 
-                              color: var(--vscode-inputValidation-warningForeground); }
-            .file-info { color: var(--vscode-descriptionForeground); font-size: 0.9em; }
-            .error-list { display: flex; flex-direction: column; gap: 10px; }
-            .error-item { padding: 15px; border-left: 4px solid; border-radius: 4px; 
-                         background-color: var(--vscode-input-background); cursor: pointer; 
-                         transition: background-color 0.2s; }
-            .error-item:hover { background-color: var(--vscode-list-hoverBackground); }
-            .error-error { border-color: var(--vscode-inputValidation-errorBorder); }
-            .error-warning { border-color: var(--vscode-inputValidation-warningBorder); }
-            .error-info { border-color: var(--vscode-inputValidation-infoBorder); }
-            .error-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-            .error-location { color: var(--vscode-descriptionForeground); font-size: 0.9em; }
-            .error-message { margin-bottom: 8px; line-height: 1.4; }
-            .error-suggestion { color: var(--vscode-inputValidation-infoForeground); font-style: italic; margin-bottom: 8px; }
-            button { padding: 6px 12px; border: 1px solid var(--vscode-button-border); 
-                    background-color: var(--vscode-button-background); color: var(--vscode-button-foreground); 
-                    border-radius: 2px; cursor: pointer; font-size: 0.8em; }
-            button:hover { background-color: var(--vscode-button-hoverBackground); }
-            .actions-bar { position: sticky; top: 0; background-color: var(--vscode-editor-background); 
-                         padding: 15px 0; border-bottom: 1px solid var(--vscode-panel-border); 
-                         margin-bottom: 20px; display: flex; gap: 10px; }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h2>Résultats de Validation XML</h2>
-            <div class="file-info">Fichier: ${params.xmlUri}</div>
-            <div class="summary">
-                <div class="summary-item summary-errors">${params.errorCount} Erreur(s)</div>
-                <div class="summary-item summary-warnings">${params.warningCount} Avertissement(s)</div>
-            </div>
-        </div>
-        
-        <div class="actions-bar">
-            <button onclick="validateAgain()">🔄 Revalider</button>
-            <button onclick="copyResults()">📋 Copier le rapport</button>
-        </div>
-        
-        <div class="error-list">
-            ${params.errors.map(error => `
-                <div class="error-item error-${error.severity}" onclick="showError(${error.line})">
-                    <div class="error-header">
-                        <strong>${error.code || error.severity}</strong>
-                        <span class="error-location">Ligne ${error.line}, Colonne ${error.column}</span>
-                    </div>
-                    <div class="error-message">${escapeHtml(error.message)}</div>
-                    ${error.suggestion ? `<div class="error-suggestion">💡 ${escapeHtml(error.suggestion)}</div>` : ''}
-                </div>
-            `).join('')}
-        </div>
-        
-        <script>
-            const vscode = acquireVsCodeApi();
-            
-            function showError(line) {
-                vscode.postMessage({
-                    command: 'showError',
-                    line: line - 1,
-                    message: 'Erreur ligne ' + line
+            // Demander si on veut un XSD
+            const useXsd = await vscode.window.showQuickPick(
+                ['Oui, sélectionner un XSD', 'Non, valider sans schéma'],
+                { placeHolder: 'Voulez-vous valider avec un schéma XSD ?' }
+            );
+
+            if (!useXsd) {
+                return;
+            }
+
+            let xsdUri: vscode.Uri | undefined;
+
+            if (useXsd === 'Oui, sélectionner un XSD') {
+                const xsdFiles = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    openLabel: 'Sélectionner le schéma XSD',
+                    filters: { 'XSD Files': ['xsd'], 'All Files': ['*'] },
+                    title: 'Sélectionner le fichier XSD'
                 });
+
+                if (!xsdFiles || xsdFiles.length === 0) {
+                    vscode.window.showWarningMessage('Aucun XSD sélectionné');
+                    return;
+                }
+
+                // ✅ RÉCUPÉRATION DE L'URL XSD : xsdFiles[0]
+                xsdUri = xsdFiles[0];
+                console.log('📄 XSD sélectionné:', xsdUri.toString());
             }
+
+            await validateXmlFile(client, xmlUri, xsdUri);
+        }
+    );
+
+    // Commande 3 : Validation rapide
+    const validateQuickCommand = vscode.commands.registerCommand(
+        'xml.validateQuick',
+        async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || !editor.document.uri.fsPath.endsWith('.xml')) {
+                vscode.window.showWarningMessage('Aucun fichier XML ouvert');
+                return;
+            }
+
+            // ✅ RÉCUPÉRATION DE L'URL XML
+            const xmlUri = editor.document.uri;
             
-            function validateAgain() {
-                vscode.postMessage({ command: 'validateAgain' });
-            }
+            // Chercher un XSD avec le même nom
+            const xsdPath = xmlUri.fsPath.replace('.xml', '.xsd');
+            let xsdUri: vscode.Uri | undefined;
             
-            function copyResults() {
-                const results = ${JSON.stringify(params.errors)};
-                const text = results.map(error => 
-                    'Ligne ' + error.line + ': [' + error.severity + '] ' + error.message
-                ).join('\\n');
-                navigator.clipboard.writeText(text);
+            try {
+                await vscode.workspace.fs.stat(vscode.Uri.file(xsdPath));
+                // ✅ RÉCUPÉRATION DE L'URL XSD (si trouvé)
+                xsdUri = vscode.Uri.file(xsdPath);
+                vscode.window.showInformationMessage(`XSD trouvé : ${xsdPath}`);
+            } catch {
+                vscode.window.showInformationMessage('Validation sans schéma');
             }
-        </script>
-    </body>
-    </html>`;
+
+            await validateXmlFile(client, xmlUri, xsdUri);
+        }
+    );
+
+    // Enregistrer tout
+    context.subscriptions.push(
+        validateCurrentCommand,
+        validateWithSchemaCommand,
+        validateQuickCommand,
+        diagnosticCollection,
+        client  // Important : disposer le client à la désactivation
+    );
 }
 
-async function showErrorInEditor(line: number, message: string) {
-    const activeEditor = vscode.window.activeTextEditor;
-    if (activeEditor) {
-        const position = new vscode.Position(line, 0);
-        const range = new vscode.Range(position, position);
-        activeEditor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-        activeEditor.selection = new vscode.Selection(position, position);
+// ========================================
+// 📤 FONCTION D'ENVOI AU SERVEUR
+// ========================================
+async function validateXmlFile(
+    client: LanguageClient,
+    xmlUri: vscode.Uri,
+    xsdUri?: vscode.Uri
+) {
+    try {
+        console.log('📤 Envoi de la requête au serveur LSP...');
+        console.log('   XML URI:', xmlUri.toString());
+        console.log('   XSD URI:', xsdUri?.toString() || 'null');
+
+        // 🎯 ENVOI DES URLS AU SERVEUR
+        const response = await client.sendRequest<ValidationResponse>(
+            'xml/validateFiles',
+            {
+                xmlUri: xmlUri.toString(),    // ← Conversion Uri → String
+                xsdUri: xsdUri?.toString()    // ← Conversion Uri → String (ou undefined)
+            }
+        );
+
+        console.log('✅ Réponse reçue:', response);
+        console.log(`📊 ${response.errorCount} erreurs, ${response.warningCount} warnings`);
+
+        // Afficher les diagnostics
+        if (response.diagnostics && response.diagnostics.length > 0) {
+            const vscodeDiagnostics = response.diagnostics.map(d => 
+                convertToVsCodeDiagnostic(d)
+            );
+            
+            diagnosticCollection.set(xmlUri, vscodeDiagnostics);
+            
+            vscode.window.showInformationMessage(
+                `Validation terminée: ${response.errorCount} erreurs trouvées`
+            );
+        } else {
+            diagnosticCollection.clear();
+            vscode.window.showInformationMessage('✅ Aucune erreur trouvée !');
+        }
+
+        // Afficher le résumé
+        const outputChannel = vscode.window.createOutputChannel('XML Validation');
+        outputChannel.appendLine(`\n=== Validation de ${xmlUri.fsPath} ===`);
+        outputChannel.appendLine(`Taille: ${response.fileSize} bytes`);
+        outputChannel.appendLine(`Temps: ${response.validationTime} ms`);
+        outputChannel.appendLine(`Résultat: ${response.summary}`);
+        outputChannel.show();
+
+    } catch (error) {
+        console.error('❌ Erreur lors de la validation:', error);
+        vscode.window.showErrorMessage(`Erreur de validation: ${error}`);
+    }
+}
+
+function convertToVsCodeDiagnostic(lspDiag: any): vscode.Diagnostic {
+    const range = new vscode.Range(
+        lspDiag.range.start.line,
+        lspDiag.range.start.character,
+        lspDiag.range.end.line,
+        lspDiag.range.end.character
+    );
+
+    const severity = mapSeverity(lspDiag.severity);
+    const diagnostic = new vscode.Diagnostic(range, lspDiag.message, severity);
+    diagnostic.source = lspDiag.source || 'xml-validator';
+    diagnostic.code = lspDiag.code;
+    return diagnostic;
+}
+
+function mapSeverity(lspSeverity: number): vscode.DiagnosticSeverity {
+    switch (lspSeverity) {
+        case 1: return vscode.DiagnosticSeverity.Error;
+        case 2: return vscode.DiagnosticSeverity.Warning;
+        case 3: return vscode.DiagnosticSeverity.Information;
+        case 4: return vscode.DiagnosticSeverity.Hint;
+        default: return vscode.DiagnosticSeverity.Error;
     }
 }
 
