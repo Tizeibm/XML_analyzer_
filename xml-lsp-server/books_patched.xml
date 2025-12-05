@@ -1,13 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <catalog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="books.xsd">
-    <book id="bk101">
-    <author>NOUVEAU AUTEUR</author>
-    <title>NOUVEAU TITRE</title>
-    <genre>Science Fiction</genre>
-    <price>999.99</price>
-    <description>Ce livre a été modifié via Virtual Patching!</description>
-</book>
+    
     <book id="bk000002">
         <author>Author 2</author>
         <title>Book Title 2</title>

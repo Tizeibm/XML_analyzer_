@@ -1,10 +1,8 @@
 package com.xml.services;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -31,6 +29,10 @@ public class FileSaver {
 
         long startTime = System.currentTimeMillis();
         
+        // Récupérer et valider les patchs AVANT la sauvegarde
+        List<Patch> patches = patchManager.getAllPatchesSorted();
+        validatePatches(patches, originalFile.length());
+        
         // Si c'est le même fichier, créer un fichier temporaire
         File tempFile = null;
         File targetFile = outputFile;
@@ -43,13 +45,13 @@ public class FileSaver {
         try (RandomAccessFile raf = new RandomAccessFile(originalFile, "r");
              java.io.BufferedOutputStream bos = new java.io.BufferedOutputStream(new FileOutputStream(targetFile))) {
             
-            List<Patch> patches = patchManager.getAllPatchesSorted();
             long currentPos = 0;
             
             for (Patch patch : patches) {
                 // Écrire le contenu original avant ce patch
-                if (patch.getGlobalStartOffset() > currentPos) {
-                    copyBytes(raf, bos, currentPos, patch.getGlobalStartOffset());
+                // IMPORTANT: Utiliser getOriginalStartOffset() pour la position dans le fichier ORIGINAL
+                if (patch.getOriginalStartOffset() > currentPos) {
+                    copyBytes(raf, bos, currentPos, patch.getOriginalStartOffset());
                 }
                 
                 // Écrire le contenu du patch (convertir String -> bytes UTF-8)
@@ -57,7 +59,9 @@ public class FileSaver {
                 bos.write(patchBytes);
                 
                 // Avancer la position courante
-                currentPos = patch.getGlobalEndOffset();
+                // CRITICAL FIX: Utiliser getOriginalEndOffset() pour savoir combien de bytes 
+                // du fichier ORIGINAL ont été remplacés
+                currentPos = patch.getOriginalEndOffset();
             }
             
             // Copier le reste du fichier
@@ -86,6 +90,45 @@ public class FileSaver {
     }
     
     /**
+     * Valide la liste de patchs avant sauvegarde.
+     * Lance une exception si les patchs sont invalides.
+     */
+    private void validatePatches(List<Patch> patches, long fileLength) {
+        long lastEndOffset = 0;
+        
+        for (int i = 0; i < patches.size(); i++) {
+            Patch patch = patches.get(i);
+            
+            // Vérifier que le patch a des offsets valides
+            if (patch.getOriginalStartOffset() < 0) {
+                throw new IllegalStateException(
+                    "Patch #" + i + " a un originalStartOffset négatif: " + patch.getOriginalStartOffset());
+            }
+            
+            // Vérifier que le texte n'est pas null (déjà géré par Patch, mais double check)
+            if (patch.getReplacementText() == null) {
+                throw new IllegalStateException("Patch #" + i + " a un texte de remplacement null");
+            }
+            
+            // Vérifier que le patch ne dépasse pas la fin du fichier
+            if (patch.getOriginalEndOffset() > fileLength) {
+                throw new IllegalStateException(
+                    "Patch #" + i + " dépasse la fin du fichier. Offset fin: " + 
+                    patch.getOriginalEndOffset() + ", taille fichier: " + fileLength);
+            }
+            
+            // Vérifier que les patchs sont triés et ne se chevauchent pas
+            if (patch.getOriginalStartOffset() < lastEndOffset) {
+                throw new IllegalStateException(
+                    "Patch #" + i + " chevauche le patch précédent. Start: " + 
+                    patch.getOriginalStartOffset() + ", dernier end: " + lastEndOffset);
+            }
+            
+            lastEndOffset = patch.getOriginalEndOffset();
+        }
+    }
+    
+    /**
      * Copie des bytes depuis le fichier source vers l'output stream par petits blocs.
      */
     private void copyBytes(RandomAccessFile raf, java.io.BufferedOutputStream bos, long start, long end) throws IOException {
@@ -106,3 +149,4 @@ public class FileSaver {
         }
     }
 }
+

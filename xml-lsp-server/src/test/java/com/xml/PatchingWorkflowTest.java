@@ -112,4 +112,92 @@ public class PatchingWorkflowTest {
         String expected = "<root><item>Patched</item></root>";
         assertEquals(expected, newContent);
     }
+    
+    /**
+     * TEST CRITIQUE: Vérifie que les patches avec longueurs différentes fonctionnent.
+     * C'est le bug principal signalé avec VS Code.
+     */
+    @Test
+    void testFileSavingWithExpandingPatch() throws IOException {
+        // Original: "<root>AB</root>" (15 bytes)
+        Path xmlPath = tempDir.resolve("expand.xml");
+        String content = "<root>AB</root>";
+        Files.writeString(xmlPath, content);
+        
+        // Patch: Remplacer "AB" (2 bytes, offset 6-8) par "EXPANDED_TEXT" (13 bytes)
+        // Cette situation provoquait un "trou" avant le fix
+        Patch p = new Patch(6, 8, "EXPANDED_TEXT", PatchType.REPLACE, "f1");
+        patchManager.addPatch(p);
+        
+        fileSaver.saveWithPatches(xmlPath.toFile(), xmlPath.toFile(), null, patchManager);
+        
+        String newContent = Files.readString(xmlPath);
+        String expected = "<root>EXPANDED_TEXT</root>";
+        assertEquals(expected, newContent);
+        assertEquals(26, newContent.length()); // 15 - 2 + 13 = 26
+    }
+    
+    @Test
+    void testFileSavingWithShrinkingPatch() throws IOException {
+        // Original: "<root>LONG_ORIGINAL_TEXT</root>" (31 bytes)
+        Path xmlPath = tempDir.resolve("shrink.xml");
+        String content = "<root>LONG_ORIGINAL_TEXT</root>";
+        Files.writeString(xmlPath, content);
+        
+        // Patch: Remplacer "LONG_ORIGINAL_TEXT" (18 bytes, offset 6-24) par "XY" (2 bytes)
+        Patch p = new Patch(6, 24, "XY", PatchType.REPLACE, "f1");
+        patchManager.addPatch(p);
+        
+        fileSaver.saveWithPatches(xmlPath.toFile(), xmlPath.toFile(), null, patchManager);
+        
+        String newContent = Files.readString(xmlPath);
+        String expected = "<root>XY</root>";
+        assertEquals(expected, newContent);
+        assertEquals(15, newContent.length()); // 31 - 18 + 2 = 15
+    }
+    
+    @Test
+    void testMultipleLengthChangingPatches() throws IOException {
+        // Original: "<a>111</a><b>222</b><c>333</c>" (30 bytes)
+        Path xmlPath = tempDir.resolve("multi.xml");
+        String content = "<a>111</a><b>222</b><c>333</c>";
+        Files.writeString(xmlPath, content);
+        
+        // Patch 1: "111" (offset 3-6) -> "ALPHA" (5 bytes) - expand
+        Patch p1 = new Patch(3, 6, "ALPHA", PatchType.REPLACE, "f1");
+        // Patch 2: "222" (offset 13-16) -> "B" (1 byte) - shrink
+        Patch p2 = new Patch(13, 16, "B", PatchType.REPLACE, "f2");
+        // Patch 3: "333" (offset 23-26) -> "GAMMA" (5 bytes) - expand
+        Patch p3 = new Patch(23, 26, "GAMMA", PatchType.REPLACE, "f3");
+        
+        patchManager.addPatch(p1);
+        patchManager.addPatch(p2);
+        patchManager.addPatch(p3);
+        
+        fileSaver.saveWithPatches(xmlPath.toFile(), xmlPath.toFile(), null, patchManager);
+        
+        String newContent = Files.readString(xmlPath);
+        String expected = "<a>ALPHA</a><b>B</b><c>GAMMA</c>";
+        assertEquals(expected, newContent);
+    }
+    
+    @Test
+    void testPatchLengthMethods() {
+        // Vérifier les nouvelles méthodes de longueur
+        Patch insert = new Patch(10, 10, "INSERTED", PatchType.INSERT, "f1");
+        assertEquals(0, insert.getOriginalLength());
+        assertEquals(8, insert.getNewLength());
+        assertEquals(8, insert.getLengthDelta()); // +8
+        
+        Patch delete = new Patch(10, 20, "", PatchType.DELETE, "f1");
+        assertEquals(10, delete.getOriginalLength());
+        assertEquals(0, delete.getNewLength());
+        assertEquals(-10, delete.getLengthDelta()); // -10
+        
+        Patch replace = new Patch(10, 15, "REPLACEMENT", PatchType.REPLACE, "f1");
+        assertEquals(5, replace.getOriginalLength());
+        assertEquals(11, replace.getNewLength());
+        assertEquals(6, replace.getLengthDelta()); // +6
+    }
 }
+
